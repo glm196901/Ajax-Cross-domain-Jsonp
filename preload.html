@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <style>
+        * { margin: 0; padding: 0; }
+
+        a { text-decoration: none; color: #333333; }
+
+        ul, li { list-style: none; }
+
+        body { font-size: 14px; font-family: "微软雅黑"; background: #336688; }
+
+        .ml15 { margin-left: 15px; }
+
+        .mr15 { margin-right: 15px; }
+
+        .container { margin: 30px auto; position: relative; width: 100%; }
+
+        .movie { width: 200px; display: flex; flex-direction: column;
+            box-shadow: 1px 1px 1em #dddddd; position: absolute; top: 0; left: 0; transition: 1s; }
+
+        .movie img, .movie a { display: block; }
+
+        .movie .year { height: 30px; line-height: 30px; background: #f7e9ee; display: flex; justify-content: space-between; }
+
+        .movie .year span { text-align: right; }
+
+        .movie .movie_info { display: flex; justify-content: space-between; background: #f7e9ee; padding-bottom: 5px; }
+    </style>
+</head>
+<!--
+    数据源: 'http://api.douban.com/v2/movie/top250' 豆瓣
+
+    获取数据
+    解析数据
+    dom生成 jsonp
+    瀑布流加载动画
+    图片自适应 大小
+    懒加载技术
+        触发机制 滚动条对比当前稳当高度
+    业务逻辑优化
+        缓存池懒加载
+    ES6 高级技术组应用
+    模拟模块化开发
+    key value
+
+    视图模板
+        动态生成dom节点
+            1.创建节点
+                createElement
+            2.数据绑定
+                `${}`
+            3.添加到盒子
+                .container
+    ~fuction(){}()
+    (function(){})(); 匿名函数立刻自执行
+     IIFE Immediately-Invoked Function Expression (IIFE)
+    瀑布流定位算法
+        1.初始化
+        ~~ 二进制取反
+        2.arrleft 存放当前行top
+-->
+<body>
+<div class="container" style="width: 1040px;">
+
+</div>
+
+
+
+<!-- jQuery first, then Popper.js, then Bootstrap JS. -->
+<script src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+<script >
+/*	分组实现
+	获取数据
+    $ajax
+    [].forEach(function(item，index){
+        item 每一条数据
+        index 是数据对应下表
+    })
+*/
+const url = 'http://api.douban.com/v2/movie/top250';
+let oContainer = document.querySelector('.container');
+let width = 200;
+let space = 10;
+let outerWidth = width + space;
+let num = 0; //每行有几个div
+let lastDom =null; //初始化最后一个元素
+let toggle = false; //设置一个开关
+let cache = []; //缓存代理 缓存池
+start = 0;//初始化数据起始位置
+cells(); //初始化网格高度
+
+var arrTop = [];
+var arrLeft = [];
+for (var i=0;i<num;i++){
+	arrTop.push(0);
+	arrLeft.push(i * outerWidth);
+}
+function cells() {
+  num = ~~(window.innerWidth / outerWidth); //浮点数整形化
+  oContainer.style.width = num * outerWidth - space +'px';
+
+}
+function getData(opt) {
+	$.ajax({
+		url: opt.url,
+		dataType: 'jsonp',
+		success:function (res) {
+			//console.log(res);
+            // 成功拿到getData数据
+            //callBack() === opt['callBack']()
+            opt['callBack']&&opt['callBack'](res.subjects);
+		}
+	})
+
+}
+getData({
+    url:url+'?start='+start+'&count=40',
+    callBack : function(data){
+    	//formatData(data)
+      //console.log(data) //电影信息是一个数据组
+      var movie = getMovieData(data);
+			//console.log(movie);
+            //调用渲染模板getMovieData() === movie
+            formatData(movie)
+		}
+});
+//将res.subjects数组的数据进行forEach遍历
+function getMovieData(data) { //获取数据模块
+    var movie = [];
+    data.forEach(function (item) {
+        //console.log(item);
+        movie.push({//整理数据进movie[]
+            title: item.title || '未命名', //短路或
+            original_title: item.original_title || '原名', //原名
+            score:item.rating.average || '未评分',
+            year: item.year || '未知年份',
+            coverImg: item.images.large || '#',
+            alt: item.alt || '#'
+        });
+    });
+  return movie;
+}
+function formatData(data) {//模板渲染 数据绑定
+    console.log(arrLeft);
+    var length = data.length;
+    var i = 0;
+  (function recur() {
+      var item = data[i];
+      var minIndex = arrTop.indexOf(Math.min(...arrTop)); //数组解构
+      console.log(minIndex);
+      var oDiv = document.createElement('div'); //创建盒子
+      oDiv.className = 'movie'; //添加类名
+      oDiv.style.top = oDiv.style.left = 0; //初始化坐标
+      oDiv.innerHTML =
+          `
+        <a href="#" target="blank">
+		    <img class="pic"src="${item.coverImg}" width="200" height="auto">
+		</a>
+		<p class="year">
+			<i class="ml15">${item.year}</i>
+			<span class="mr15">${item.original_title}</span>
+		</p>
+		<p class="movie_info">
+			<span class="title ml15">${item.title}</span>
+			<span class="score mr15">${item.score}</span>
+		</p>
+            `;
+        oContainer.appendChild(oDiv);// 塞入容器
+
+        oDiv.querySelector('.pic').onload = function () {
+          oDiv.style.left = arrLeft[minIndex] + 'px'; //当前数组最小top的下标获取
+          oDiv.style.top = arrTop[minIndex] + 'px';
+          //重置数组中高度最短的元素top
+          arrTop[minIndex] += oDiv.offsetHeight + 2* space ;
+          i++;
+          if(i === length-1) {
+          	lastDom = oDiv;//获取存储最后一元素
+            toggle = true;
+          }
+          (i<length)&&recur(); //如果下标小于数组长度 继续执行，短路与
+        };
+		})();
+	    start +=20;
+	    getData({
+            url:url+'?start='+start+'&count=20',
+            callBack : function(data){
+                cache = []; //清空缓存池
+                var movie = getMovieData(data); //数据操作 电影信息数组
+                cache = movie; //视图渲染
+            }
+	});
+
+}
+
+window.addEventListener('scroll',function () {
+  //console.log(1) 懒加载监听滚动条 滚动
+  if(toggle){
+    var sheight = document.body.scrollTop +  window.innerWidth;
+    var lastIndexHeight = lastDom.offsetTop + (lastDom.offsetHeight/2);//临界点高度
+    if(lastIndexHeight < sheight) {
+		//console.log('加载')
+		toggle = false; //开关
+        formatData(cache);
+	}
+  }
+})
+
+
+
+</script>
+</body>
+</html>
